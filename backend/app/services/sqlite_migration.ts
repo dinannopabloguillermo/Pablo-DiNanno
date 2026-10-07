@@ -55,8 +55,15 @@ export function toUtcIso(value: SqliteValue): string | null {
       ? text.replace(' ', 'T')
       : null
   if (iso === null) return null
+  // `Date` normaliza 2026-02-30 a 2 de marzo y recorta por debajo del ms: sería
+  // un cambio de dato que la verificación no vería. Se rechaza.
+  if (/\.\d{4,}/.test(iso)) return null
   const date = new Date(iso)
-  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+  if (Number.isNaN(date.getTime())) return null
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number)
+  const day = new Date(Date.UTC(y, m - 1, d))
+  if (day.getUTCMonth() !== m - 1 || day.getUTCDate() !== d) return null
+  return date.toISOString()
 }
 
 function quoteSqlite(identifier: string) {

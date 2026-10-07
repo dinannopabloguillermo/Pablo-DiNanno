@@ -143,6 +143,8 @@ test.group('Migración desde SQLite', (group) => {
     assert.equal(toUtcIso('2026-10-07T23:40:21+02:00'), '2026-10-07T21:40:21.000Z')
     assert.equal(toUtcIso(1791409221133), '2026-10-07T21:40:21.133Z')
     assert.isNull(toUtcIso('ayer'))
+    assert.isNull(toUtcIso('2026-02-30 21:40:21'))
+    assert.isNull(toUtcIso('2026-10-07 21:40:21.123456'))
     assert.isNull(toUtcIso(null))
   })
 })
