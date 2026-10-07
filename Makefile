@@ -14,7 +14,7 @@ BACKEND  := backend
 FRONTEND := frontend
 
 .DEFAULT_GOAL := help
-.PHONY: help setup start install env migrate clean db-up db-down migrate-test test
+.PHONY: help setup start install env migrate clean db-up db-down migrate-test migrate-data test
 
 # La ayuda se genera a partir de los comentarios `## ...` de cada target, para
 # que no haya un segundo listado que mantener a mano y que pueda divergir.
@@ -78,6 +78,14 @@ migrate: db-up ## Migra las dos bases (desarrollo y pruebas)
 migrate-test: db-up
 	@echo "🗃️  Migrando la base de pruebas..."
 	@cd $(BACKEND) && NODE_ENV=test node ace migration:run
+
+# POR QUÉ EXISTE (directiva «los datos no se copian, se migran», CLAUDE.md):
+# `migrate` mueve el esquema, no los datos. Copiar un SQLite a PostgreSQL sin
+# convertir rompe en silencio (fechas con dos formatos, zona horaria, secuencias).
+# Ver docs/upgrade-mig-issues.md. `DRY=1` carga, verifica y revierte.
+SQLITE ?= tmp/db.sqlite3
+migrate-data: migrate ## Migra los datos de un SQLite a PostgreSQL y los verifica (SQLITE=ruta DRY=1)
+	@cd $(BACKEND) && node ace db:migrate-from-sqlite --sqlite=$(SQLITE) $(if $(DRY),--dry-run,)
 
 test: migrate-test ## Migra la base de pruebas y corre la batería
 	@cd $(BACKEND) && npm test
