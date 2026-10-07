@@ -14,7 +14,7 @@ BACKEND  := backend
 FRONTEND := frontend
 
 .DEFAULT_GOAL := help
-.PHONY: help setup start install env migrate clean
+.PHONY: help setup start install env migrate clean db-up db-down migrate-test test
 
 # La ayuda se genera a partir de los comentarios `## ...` de cada target, para
 # que no haya un segundo listado que mantener a mano y que pueda divergir.
@@ -22,14 +22,14 @@ help: ## Muestra esta ayuda
 	@echo "FlowSync — targets disponibles:"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) \
-		| awk 'BEGIN { FS = ":.*## " }; { printf "  make %-8s %s\n", $$1, $$2 }'
+		| awk 'BEGIN { FS = ":.*## " }; { printf "  make %-13s %s\n", $$1, $$2 }'
 	@echo ""
 
 # ---------------------------------------------------------------------------
 # setup
 # ---------------------------------------------------------------------------
 
-setup: install env migrate ## Deja el proyecto listo para arrancar
+setup: install env db-up migrate ## Deja el proyecto listo para arrancar
 	@echo ""
 	@echo "✅ Setup completado. Arranca todo con: make start"
 
@@ -61,9 +61,26 @@ env:
 		cd $(BACKEND) && node ace generate:key; \
 	fi
 
-migrate:
-	@echo "🗃️  Ejecutando migraciones..."
+# `--wait` espera a que los healthchecks pasen a sanos: la imagen no acepta
+# conexiones mientras crea la base la primera vez.
+db-up: ## Levanta las bases (dev :54410, test :54411) y espera a que estén sanas
+	@echo "🐘 Levantando PostgreSQL..."
+	@docker compose up -d --wait
+
+db-down: ## Para las bases (la de desarrollo conserva datos; la de test se pierde)
+	@docker compose down
+
+migrate: db-up ## Migra las dos bases (desarrollo y pruebas)
+	@echo "🗃️  Migrando la base de desarrollo..."
 	@cd $(BACKEND) && node ace migration:run
+	@$(MAKE) --no-print-directory migrate-test
+
+migrate-test: db-up
+	@echo "🗃️  Migrando la base de pruebas..."
+	@cd $(BACKEND) && NODE_ENV=test node ace migration:run
+
+test: migrate-test ## Migra la base de pruebas y corre la batería
+	@cd $(BACKEND) && npm test
 
 # ---------------------------------------------------------------------------
 # start
@@ -112,8 +129,8 @@ start: ## Levanta backend y frontend a la vez
 # clean
 # ---------------------------------------------------------------------------
 
-clean: ## Borra node_modules y la base de datos SQLite
+clean: ## Borra node_modules y los contenedores y el volumen de la base de desarrollo
 	@echo "🧹 Limpiando..."
 	@rm -rf $(BACKEND)/node_modules $(FRONTEND)/node_modules
-	@rm -f $(BACKEND)/tmp/db.sqlite3 $(BACKEND)/tmp/db.sqlite3-wal $(BACKEND)/tmp/db.sqlite3-shm
+	@docker compose down -v
 	@echo "✅ Listo. Vuelve a ejecutar: make setup"

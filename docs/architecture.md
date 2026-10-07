@@ -4,7 +4,7 @@
 
 El diagrama muestra las piezas de FlowSync que se ejecutan por separado y cómo hablan entre
 sí: la SPA de React que corre en el navegador, la API de AdonisJS que escucha en el puerto
-3333, el fichero SQLite donde vive todo el estado, y el `localStorage` del navegador, que es
+3333, la base PostgreSQL donde vive todo el estado, y el `localStorage` del navegador, que es
 el único sitio donde persiste la sesión. Es un diagrama de contenedores, así que no entra en
 los controladores, modelos ni transformers de dentro de la API: eso queda resumido debajo.
 Todo lo dibujado está leído del código —`start/routes.ts`, `config/database.ts`,
@@ -21,7 +21,7 @@ C4Container
         Container(spa, "SPA de FlowSync", "React 19 + react-router + Vite 8 + Tailwind v4 + shadcn/ui", "Pantallas de login registro perfil lista de tareas y tarea suelta. Los guards ProtectedRoute y PublicOnlyRoute deciden a que se llega con sesion y a que sin ella")
         ContainerDb(storage, "localStorage del navegador", "Web Storage API", "Guarda el token de acceso bajo la clave flowsync.token. Al arrancar la SPA lo revalida contra el perfil antes de darlo por bueno")
         Container(api, "API de FlowSync", "AdonisJS 7 sobre Node escuchando en el puerto 3333", "Expone las rutas bajo /api/v1. Valida con VineJS 4 autentica con access tokens opacos y devuelve toda respuesta envuelta en data por el serializer del ApiProvider")
-        ContainerDb(db, "Base de datos de FlowSync", "SQLite mediante better-sqlite3 en el fichero backend/tmp/db.sqlite3", "Tablas users auth_access_tokens y tasks. El esquema se genera desde las migraciones")
+        ContainerDb(db, "Base de datos de FlowSync", "PostgreSQL 17 en Docker (compose.yaml), puerto 54410", "Tablas users auth_access_tokens y tasks. El esquema se genera desde las migraciones")
     }
 
     Rel(miembro, spa, "Usa desde el navegador", "HTTP en el puerto 5173")
@@ -70,8 +70,8 @@ C4Container
   [`providers/api_provider.ts`](../backend/providers/api_provider.ts), que inyecta
   `ctx.serialize()` en cada `HttpContext`.
 
-**Base de datos** — una única conexión SQLite declarada en
-[`backend/config/database.ts`](../backend/config/database.ts), sin override por entorno. Tres
+**Base de datos** — una única conexión PostgreSQL declarada en
+[`backend/config/database.ts`](../backend/config/database.ts); host, puerto y base salen del entorno (`backend/.env`, o `backend/.env.test` en pruebas). Tres
 tablas creadas por las migraciones de [`backend/database/migrations/`](../backend/database/migrations/):
 `users`, `auth_access_tokens` y `tasks`, esta última con `assignee_id` apuntando a `users` con
 `onDelete CASCADE` y una `due_date` nulable.
@@ -97,5 +97,5 @@ vencimiento. La sesión vive en [`frontend/src/auth/`](../frontend/src/auth/) y 
   guard `api`, pero ninguna ruta lo usa; el `default` es `api` y toda la autenticación real va
   por access tokens opacos.
 - **Los tests no son un contenedor.** Las suites de `backend/tests/` no se ejecutan en
-  producción; conviene saber, eso sí, que pegan contra el mismo fichero SQLite que el servidor
-  de desarrollo, porque `config/database.ts` no tiene override por entorno.
+  producción; conviene saber, eso sí, que pegan contra una base distinta (servicio `db-test`, puerto 54411, en memoria),
+  que `backend/.env.test` selecciona al correr con `NODE_ENV=test`.

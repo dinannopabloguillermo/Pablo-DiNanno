@@ -1,0 +1,44 @@
+# Bases de datos de FlowSync. Puertos 54410/54411 a propósito: el 5432 suele
+# estar ocupado por un PostgreSQL local y el error resultante no menciona a Docker.
+#
+# El healthcheck va por TCP (-h 127.0.0.1): durante la inicialización la imagen
+# arranca un servidor temporal que solo escucha en el socket unix, así que una
+# comprobación por socket daría "sano" antes de tiempo.
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    ports:
+      - '54410:5432'
+    environment:
+      POSTGRES_USER: flowsync
+      POSTGRES_PASSWORD: flowsync
+      POSTGRES_DB: flowsync_dev
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U flowsync -d flowsync_dev']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  # Efímera a propósito: sin volumen y con los datos en memoria.
+  db-test:
+    image: pgvector/pgvector:pg17
+    ports:
+      - '54411:5432'
+    environment:
+      POSTGRES_USER: flowsync
+      POSTGRES_PASSWORD: flowsync
+      POSTGRES_DB: flowsync_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U flowsync -d flowsync_test']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+volumes:
+  db-data:
